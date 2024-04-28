@@ -1,5 +1,9 @@
 package com.example.ecohackaton.ui.login
 
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothSocket
+import android.content.IntentFilter
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.annotation.StringRes
@@ -7,6 +11,7 @@ import androidx.fragment.app.Fragment
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -15,6 +20,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.Toast
+import androidx.core.content.ContextCompat.registerReceiver
 import com.example.ecohackaton.databinding.FragmentApLoginBinding
 
 import com.example.ecohackaton.R
@@ -27,6 +33,8 @@ class ApLoginFragment : Fragment() {
     // This property is only valid between onCreateView and
     // onDestroyView.
     private val binding get() = _binding!!
+    private lateinit var bluetoothAdapter: BluetoothAdapter
+    private var bluetoothSocket: BluetoothSocket? = null
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -35,6 +43,23 @@ class ApLoginFragment : Fragment() {
     ): View {
 
         _binding = FragmentApLoginBinding.inflate(inflater, container, false)
+
+        bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        Log.d("Bluetooth", "BluetoothAdapter: $bluetoothAdapter")
+        if (!bluetoothAdapter.isEnabled) {
+            binding.status.text = "Bluetooth выключен"
+            Log.d("Bluetooth", "Bluetooth выключен")
+        } else {
+            binding.status.text = "Bluetooth включен"
+            Log.d("Bluetooth", "Bluetooth включен")
+        }
+
+        Log.d("Bluetooth", "BluetoothSocket: $bluetoothSocket")
+        if (bluetoothSocket != null && bluetoothSocket!!.isConnected) {
+            binding.status.text = "Подключено"
+            Log.d("Bluetooth", "Подключено")
+        }
+
         return binding.root
 
     }

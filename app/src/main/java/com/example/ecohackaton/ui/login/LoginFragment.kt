@@ -1,5 +1,6 @@
 package com.example.ecohackaton.ui.login
 
+import android.content.Intent
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.annotation.StringRes
@@ -15,6 +16,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.Toast
+import com.example.ecohackaton.MainActivity
 import com.example.ecohackaton.databinding.FragmentLoginBinding
 
 import com.example.ecohackaton.R
@@ -116,7 +118,9 @@ class LoginFragment : Fragment() {
         val welcome = getString(R.string.welcome) + model.displayName
         // TODO : initiate successful logged in experience
         val appContext = context?.applicationContext ?: return
-        Toast.makeText(appContext, welcome, Toast.LENGTH_LONG).show()
+        val intent = Intent(appContext, MainActivity::class.java)
+        startActivity(intent)
+//        Toast.makeText(appContext, welcome, Toast.LENGTH_LONG).show()
     }
 
     private fun showLoginFailed(@StringRes errorString: Int) {

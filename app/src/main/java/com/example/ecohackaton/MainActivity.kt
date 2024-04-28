@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity(), LocationListener {
         }
 
         MapKitFactory.setApiKey("")
-
+        Log.d(MainActivity::class.java.simpleName, "MainActivity")
 
     }
 
