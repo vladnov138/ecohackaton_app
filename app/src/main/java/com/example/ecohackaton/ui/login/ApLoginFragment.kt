@@ -1,9 +1,12 @@
 package com.example.ecohackaton.ui.login
 
+import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.annotation.StringRes
@@ -20,10 +23,13 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.Toast
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat.registerReceiver
 import com.example.ecohackaton.databinding.FragmentApLoginBinding
 
 import com.example.ecohackaton.R
+import java.io.IOException
+import java.util.UUID
 
 class ApLoginFragment : Fragment() {
 
@@ -46,28 +52,18 @@ class ApLoginFragment : Fragment() {
 
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
         Log.d("Bluetooth", "BluetoothAdapter: $bluetoothAdapter")
-        if (!bluetoothAdapter.isEnabled) {
-            binding.status.text = "Bluetooth выключен"
-            Log.d("Bluetooth", "Bluetooth выключен")
-        } else {
-            binding.status.text = "Bluetooth включен"
-            Log.d("Bluetooth", "Bluetooth включен")
-        }
 
-        Log.d("Bluetooth", "BluetoothSocket: $bluetoothSocket")
-        if (bluetoothSocket != null && bluetoothSocket!!.isConnected) {
-            binding.status.text = "Подключено"
-            Log.d("Bluetooth", "Подключено")
-        }
+
 
         return binding.root
-
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         loginViewModel = ViewModelProvider(this, LoginViewModelFactory())
             .get(LoginViewModel::class.java)
+
+        checkBluetooth()
 
         val usernameEditText = binding.username
         val passwordEditText = binding.password
@@ -130,11 +126,51 @@ class ApLoginFragment : Fragment() {
 
         loginButton.setOnClickListener {
             loadingProgressBar.visibility = View.VISIBLE
-            loginViewModel.login(
-                usernameEditText.text.toString(),
-                passwordEditText.text.toString()
-            )
+//            loginViewModel.login(
+//                usernameEditText.text.toString(),
+//                passwordEditText.text.toString()
+//            )
+            val ap = usernameEditText.text.toString()
+            val password = usernameEditText.text.toString()
+            bluetoothSocket?.outputStream?.write("$ap $password".toByteArray())
         }
+    }
+
+    private fun checkBluetooth() {
+        if (!bluetoothAdapter.isEnabled) {
+            binding.status.text = "Bluetooth выключен"
+            Log.d("Bluetooth", "Bluetooth выключен")
+        } else {
+            binding.status.text = "Bluetooth включен"
+            Log.d("Bluetooth", "Bluetooth включен")
+        }
+
+        val device = bluetoothAdapter.getRemoteDevice("20:15:08:17:27:45")
+        Log.d("Bluetooth", "device: $device")
+        try {
+            val bluetoothSocket = if (ActivityCompat.checkSelfPermission(
+                    requireContext(),
+                    Manifest.permission.BLUETOOTH_CONNECT
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                Log.d("Bluetooth", "BluetoothSocket: нет разрешения")
+                ActivityCompat.requestPermissions(requireActivity(),
+                    arrayOf(Manifest.permission.BLUETOOTH, Manifest.permission.BLUETOOTH_ADMIN, Manifest.permission.BLUETOOTH_CONNECT),
+                    0)
+                return
+            } else {
+                device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
+            }
+            Log.d("Bluetooth", "BluetoothSocket: $bluetoothSocket")
+            bluetoothSocket.connect()
+
+            Log.d("Bluetooth", "Успешно подключено к устройству с MAC-адресом '20:15:08:17:27:45'")
+            binding.status.text = "Подключено к устройству с MAC-адресом '20:15:08:17:27:45'"
+        } catch (e: IOException) {
+            Log.e("Bluetooth", "Ошибка при подключении к устройству с MAC-адресом '20:15:08:17:27:45\"'", e)
+            binding.status.text = "Ошибка при подключении к устройству с MAC-адресом '20:15:08:17:27:45\"'"
+        }
+        Log.d("Bluetooth", "BluetoothAdapter.state: ${bluetoothAdapter.state}")
     }
 
     private fun updateUiWithUser(model: LoggedInUserView) {
