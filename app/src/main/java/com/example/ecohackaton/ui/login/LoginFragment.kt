@@ -8,6 +8,7 @@ import androidx.fragment.app.Fragment
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -16,10 +17,19 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.Toast
+import androidx.lifecycle.lifecycleScope
 import com.example.ecohackaton.MainActivity
 import com.example.ecohackaton.databinding.FragmentLoginBinding
 
 import com.example.ecohackaton.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
 
 class LoginFragment : Fragment() {
 
@@ -106,11 +116,38 @@ class LoginFragment : Fragment() {
         }
 
         loginButton.setOnClickListener {
-            loadingProgressBar.visibility = View.VISIBLE
+//            loadingProgressBar.visibility = View.VISIBLE
             loginViewModel.login(
                 usernameEditText.text.toString(),
                 passwordEditText.text.toString()
             )
+//            lifecycleScope.launch(Dispatchers.IO) {
+//                val json =
+//                    "{\"username\":\"${usernameEditText.text}\", \"password\":\"${passwordEditText.text}\"}"
+//                sendPostRequest("http://158.160.1.137:8000/user/login", json.toRequestBody())
+//            }
+        }
+    }
+
+    private suspend fun sendPostRequest(url: String, requestBody: RequestBody): String {
+        return withContext(Dispatchers.IO) {
+            val client = OkHttpClient()
+            val request = Request.Builder()
+                .url(url)
+                .post(requestBody)
+                .build()
+
+            try {
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    return@withContext response.body.string() ?: "Response body is empty"
+                } else {
+                    return@withContext "Unsuccessful response: ${response.code}"
+                }
+            } catch (e: IOException) {
+                Log.e("ViewModel", "Error executing POST request", e)
+                return@withContext "Error executing POST request: ${e.message}"
+            }
         }
     }
 
@@ -120,6 +157,7 @@ class LoginFragment : Fragment() {
         val appContext = context?.applicationContext ?: return
         val intent = Intent(appContext, MainActivity::class.java)
         startActivity(intent)
+        requireActivity().finish()
 //        Toast.makeText(appContext, welcome, Toast.LENGTH_LONG).show()
     }
 

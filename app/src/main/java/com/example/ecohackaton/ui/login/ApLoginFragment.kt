@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.location.Criteria
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
 import androidx.annotation.StringRes
@@ -25,9 +26,21 @@ import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat.registerReceiver
+import androidx.lifecycle.lifecycleScope
 import com.example.ecohackaton.databinding.FragmentApLoginBinding
 
 import com.example.ecohackaton.R
+import com.google.gson.Gson
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.executeAsync
 import java.io.IOException
 import java.util.UUID
 
@@ -53,8 +66,7 @@ class ApLoginFragment : Fragment() {
         bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
         Log.d("Bluetooth", "BluetoothAdapter: $bluetoothAdapter")
 
-
-
+        // Inflate the layout for this fragment
         return binding.root
     }
 
@@ -64,6 +76,10 @@ class ApLoginFragment : Fragment() {
             .get(LoginViewModel::class.java)
 
         checkBluetooth()
+        binding.retryBtn.setOnClickListener {
+            binding.status.text = "Connecting..."
+            checkBluetooth()
+        }
 
         val usernameEditText = binding.username
         val passwordEditText = binding.password
@@ -125,14 +141,74 @@ class ApLoginFragment : Fragment() {
         }
 
         loginButton.setOnClickListener {
-            loadingProgressBar.visibility = View.VISIBLE
+//            loadingProgressBar.visibility = View.VISIBLE
 //            loginViewModel.login(
 //                usernameEditText.text.toString(),
 //                passwordEditText.text.toString()
 //            )
             val ap = usernameEditText.text.toString()
-            val password = usernameEditText.text.toString()
-            bluetoothSocket?.outputStream?.write("$ap $password".toByteArray())
+            val password = passwordEditText.text.toString()
+            Log.d("Bluetooth", "bluetoothSocket: $bluetoothSocket")
+            Log.d("Bluetooth", "data: $ap $password")
+            val locationManager = requireContext().getSystemService(android.location.LocationManager::class.java)
+            val prv = locationManager.getBestProvider(Criteria(), true)
+            if (prv != null) {
+                if (ActivityCompat.checkSelfPermission(
+                        requireContext(),
+                        Manifest.permission.ACCESS_FINE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                        requireContext(),
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    ) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    return@setOnClickListener
+                }
+                val location = locationManager.getLastKnownLocation(prv)
+                if (location != null) {
+                    bluetoothSocket?.outputStream?.write("$ap\n$password\n${location.latitude}\n${location.longitude}".toByteArray())
+                    lifecycleScope.launch(Dispatchers.IO) {
+                        val buffer = ByteArray(1024)
+                        var bytes: Int
+                        try {
+                            while (true) {
+                                bytes = bluetoothSocket?.inputStream?.read()!!
+                                val data = buffer.copyOf(bytes)
+                                val receivedData = String(data)
+                                Log.d("Bluetooth", "Получены данные от ESP: $receivedData")
+                                if (receivedData == "O") {
+                                    val json = "{\"device_name\": \"20:15:08:17:27:45\", \"owner_token\": \"GScWNePZYwxFHiEWpce5liusf0ZFYzdoHIN7Xzc4BdzlwIAdHK\", \"device_geo\": [${location.latitude}, ${location.longitude}]}"
+                                    sendPostRequest("http://158.160.1.137:8000/register_device", json.toRequestBody("application/json".toMediaTypeOrNull()))
+                                    break
+                                }
+                            }
+                        } catch (e: IOException) {
+                            Log.e("Bluetooth", "Ошибка при чтении данных от ESP", e)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun sendPostRequest(url: String, requestBody: RequestBody): String {
+        return withContext(Dispatchers.IO) {
+            val client = OkHttpClient()
+            val request = Request.Builder()
+                .url(url)
+                .post(requestBody)
+                .build()
+
+            try {
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    return@withContext response.body.string() ?: "Response body is empty"
+                } else {
+                    return@withContext "Unsuccessful response: ${response.code}"
+                }
+            } catch (e: IOException) {
+                Log.e("ViewModel", "Error executing POST request", e)
+                return@withContext "Error executing POST request: ${e.message}"
+            }
         }
     }
 
@@ -148,7 +224,7 @@ class ApLoginFragment : Fragment() {
         val device = bluetoothAdapter.getRemoteDevice("20:15:08:17:27:45")
         Log.d("Bluetooth", "device: $device")
         try {
-            val bluetoothSocket = if (ActivityCompat.checkSelfPermission(
+            bluetoothSocket = if (ActivityCompat.checkSelfPermission(
                     requireContext(),
                     Manifest.permission.BLUETOOTH_CONNECT
                 ) != PackageManager.PERMISSION_GRANTED
@@ -162,13 +238,15 @@ class ApLoginFragment : Fragment() {
                 device.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"))
             }
             Log.d("Bluetooth", "BluetoothSocket: $bluetoothSocket")
-            bluetoothSocket.connect()
+            bluetoothSocket?.connect()
 
             Log.d("Bluetooth", "Успешно подключено к устройству с MAC-адресом '20:15:08:17:27:45'")
             binding.status.text = "Подключено к устройству с MAC-адресом '20:15:08:17:27:45'"
+            binding.retryBtn.isEnabled = false
         } catch (e: IOException) {
             Log.e("Bluetooth", "Ошибка при подключении к устройству с MAC-адресом '20:15:08:17:27:45\"'", e)
             binding.status.text = "Ошибка при подключении к устройству с MAC-адресом '20:15:08:17:27:45\"'"
+            binding.retryBtn.isEnabled = true
         }
         Log.d("Bluetooth", "BluetoothAdapter.state: ${bluetoothAdapter.state}")
     }
